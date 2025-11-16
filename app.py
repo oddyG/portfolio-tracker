@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Flask Web Server for DeBank Portfolio Tracker
-Hardcoded configuration version
+Three separate buckets: ETH, BTC, and Stablecoins
 """
 
 from flask import Flask, request, jsonify, render_template_string
@@ -18,23 +18,24 @@ from email.mime.multipart import MIMEMultipart
 app = Flask(__name__)
 CORS(app)
 
-# HARDCODED CONFIGURATION - ENDRE BARE EMAIL VERDIENE
+# HARDCODED CONFIGURATION
 DEBANK_API_KEY = "25a3031ffed891bb3805a170fde5a39fd1cc321d"
 WALLET_ADDRESS = "0x0a9ee3ff883dde459aa06f9ce817ba072aea722c"
 
-# EMAIL KONFIGURASJON - ENDRE DISSE!
+# EMAIL CONFIGURATION
 SMTP_HOST = "smtp.gmail.com"
 SMTP_PORT = 587
-SMTP_USER = "oddbjorn@soly.no"  # DIN GMAIL ADRESSE
-SMTP_PASSWORD = "din_app_password_her"  # DITT GMAIL APP PASSWORD
-SENDER_EMAIL = "oddbjorn@soly.no"  # DIN GMAIL ADRESSE
-RECIPIENT_EMAIL = "oddbjorn@soly.no"  # HVOR DU VIL MOTTA RAPPORTEN
+SMTP_USER = "oddbjorn@soly.no"
+SMTP_PASSWORD = "ppch wrqk oeku zisw"
+SENDER_EMAIL = "oddbjorn@soly.no"
+RECIPIENT_EMAIL = "oddbjorn@soly.no"
 
 # DeBank API base URL
 DEBANK_API_BASE = "https://pro-openapi.debank.com/v1"
 
-# Token categorization
-ETH_BTC_TOKENS = {"ETH", "WETH", "WBTC", "TBTC", "RENBTC", "HBTC", "BTC"}
+# Token categorization - THREE SEPARATE BUCKETS
+ETH_TOKENS = {"ETH", "WETH"}
+BTC_TOKENS = {"WBTC", "TBTC", "RENBTC", "HBTC", "BTC"}
 STABLECOIN_TOKENS = {"USDC", "USDT", "DAI", "FRAX", "TUSD", "BUSD", "USDP", "UST", "GUSD", "USDD", "LUSD"}
 
 HTML_TEMPLATE = """
@@ -50,7 +51,7 @@ HTML_TEMPLATE = """
     </style>
 </head>
 <body class="min-h-screen p-6">
-    <div class="max-w-4xl mx-auto">
+    <div class="max-w-6xl mx-auto">
         <div class="bg-white rounded-2xl shadow-2xl p-8 mb-6">
             <h1 class="text-4xl font-bold text-gray-800 mb-2">DeBank Portfolio Tracker</h1>
             <p class="text-gray-600">Monitor your crypto portfolio in real-time</p>
@@ -69,11 +70,17 @@ HTML_TEMPLATE = """
             
             <div id="successBox" class="hidden bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-lg mb-6"></div>
 
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div class="bg-gradient-to-br from-blue-400 to-indigo-500 rounded-2xl p-6 text-white shadow-xl">
+                    <h3 class="text-lg font-semibold mb-2">ETH Bucket</h3>
+                    <p class="text-3xl font-bold" id="ethValue">$0.00</p>
+                    <p class="text-sm opacity-80 mt-2">ETH, WETH</p>
+                </div>
+
                 <div class="bg-gradient-to-br from-orange-400 to-yellow-500 rounded-2xl p-6 text-white shadow-xl">
-                    <h3 class="text-lg font-semibold mb-2">ETH/BTC Bucket</h3>
-                    <p class="text-3xl font-bold" id="ethBtcValue">$0.00</p>
-                    <p class="text-sm opacity-80 mt-2">ETH, WBTC, tBTC</p>
+                    <h3 class="text-lg font-semibold mb-2">BTC Bucket</h3>
+                    <p class="text-3xl font-bold" id="btcValue">$0.00</p>
+                    <p class="text-sm opacity-80 mt-2">WBTC, tBTC</p>
                 </div>
 
                 <div class="bg-gradient-to-br from-green-400 to-emerald-500 rounded-2xl p-6 text-white shadow-xl">
@@ -126,7 +133,8 @@ HTML_TEMPLATE = """
                     document.getElementById('successBox').innerText = data.message;
                     document.getElementById('successBox').classList.remove('hidden');
                     
-                    document.getElementById('ethBtcValue').innerText = '$' + data.eth_btc_bucket.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                    document.getElementById('ethValue').innerText = '$' + data.eth_bucket.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                    document.getElementById('btcValue').innerText = '$' + data.btc_bucket.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
                     document.getElementById('stablecoinsValue').innerText = '$' + data.stablecoins_bucket.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
                     document.getElementById('totalValue').innerText = '$' + data.total_value.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
                     document.getElementById('timestamp').innerText = 'Last updated: ' + new Date(data.timestamp).toLocaleString('no-NO');
@@ -195,8 +203,9 @@ def fetch_debank_data(api_key, wallet_address):
     
     print(f"Found {len(tokens)} tokens")
     
-    # Calculate buckets
-    eth_btc_total = 0.0
+    # Calculate THREE separate buckets
+    eth_total = 0.0
+    btc_total = 0.0
     stablecoin_total = 0.0
     
     for token in tokens:
@@ -205,15 +214,19 @@ def fetch_debank_data(api_key, wallet_address):
         amount = float(token.get("amount", 0))
         usd_value = price * amount
         
-        if symbol in ETH_BTC_TOKENS:
-            eth_btc_total += usd_value
-            print(f"  {symbol}: ${usd_value:,.2f} -> ETH/BTC")
+        if symbol in ETH_TOKENS:
+            eth_total += usd_value
+            print(f"  {symbol}: ${usd_value:,.2f} -> ETH Bucket")
+        elif symbol in BTC_TOKENS:
+            btc_total += usd_value
+            print(f"  {symbol}: ${usd_value:,.2f} -> BTC Bucket")
         elif symbol in STABLECOIN_TOKENS:
             stablecoin_total += usd_value
-            print(f"  {symbol}: ${usd_value:,.2f} -> Stablecoins")
+            print(f"  {symbol}: ${usd_value:,.2f} -> Stablecoins Bucket")
     
     return {
-        "eth_btc_bucket": eth_btc_total,
+        "eth_bucket": eth_total,
+        "btc_bucket": btc_total,
         "stablecoins_bucket": stablecoin_total,
         "total_value": total_usd
     }
@@ -260,7 +273,8 @@ def run_report_auto():
 Date: {today}
 
 === Portfolio Summary ===
-ETH/BTC Bucket:        ${result['eth_btc_bucket']:,.2f}
+ETH Bucket:            ${result['eth_bucket']:,.2f}
+BTC Bucket:            ${result['btc_bucket']:,.2f}
 Stablecoins Bucket:    ${result['stablecoins_bucket']:,.2f}
 Total Portfolio Value: ${result['total_value']:,.2f}
 
@@ -269,20 +283,18 @@ Wallet: {WALLET_ADDRESS}
 Generated at: {datetime.now(oslo_tz).strftime("%Y-%m-%d %H:%M:%S %Z")}
 """
         
-        # Send email if SMTP password is configured
-        if SMTP_PASSWORD != "din_app_password_her":
-            subject = f"Daily Portfolio Report - {today}"
-            send_email_smtp(subject, email_body)
-            message = "Report generated and email sent successfully!"
-        else:
-            message = "Report generated successfully (configure SMTP password to send email)"
+        # Send email
+        subject = f"Daily Portfolio Report - {today}"
+        send_email_smtp(subject, email_body)
+        message = "Report generated and email sent successfully!"
         
         print("=== Report completed successfully ===")
         
         return jsonify({
             "success": True,
             "message": message,
-            "eth_btc_bucket": result['eth_btc_bucket'],
+            "eth_bucket": result['eth_bucket'],
+            "btc_bucket": result['btc_bucket'],
             "stablecoins_bucket": result['stablecoins_bucket'],
             "total_value": result['total_value'],
             "timestamp": datetime.now(oslo_tz).isoformat()
