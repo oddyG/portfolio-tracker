@@ -1,0 +1,1 @@
+"web: gunicorn app:app" | Out-File -FilePath Procfile -Encoding utf8
