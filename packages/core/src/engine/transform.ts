@@ -75,7 +75,7 @@ export function applyFieldMappings(
   for (const mapping of mappings) {
     const value = getNestedValue(sourceRecord, mapping.sourceField);
     if (value !== undefined) {
-      let finalValue = value;
+      let finalValue: unknown = value;
 
       // Apply inline transform if specified
       if (mapping.transform) {

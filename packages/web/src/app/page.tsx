@@ -3,26 +3,27 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { StatusBadge } from '@/components/status-badge';
-import type { Integration, SyncRunStats } from '@/lib/api';
+import type { AccountWorkflow, WorkflowRunStats } from '@/lib/api';
 
 export default function DashboardPage() {
-  const [integrations, setIntegrations] = useState<Integration[]>([]);
-  const [stats, setStats] = useState<SyncRunStats | null>(null);
+  const [workflows, setWorkflows] = useState<AccountWorkflow[]>([]);
+  const [stats, setStats] = useState<WorkflowRunStats | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const apiBase = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+  const apiBase = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+  const accountId = process.env.NEXT_PUBLIC_ACCOUNT_ID ?? 'demo-account';
 
+  useEffect(() => {
     Promise.all([
-      fetch(`${apiBase}/api/integrations`).then((r) => r.ok ? r.json() : []),
-      fetch(`${apiBase}/api/sync-runs/stats/overview`).then((r) => r.ok ? r.json() : null),
+      fetch(`${apiBase}/api/accounts/${accountId}/workflows`).then((r) => r.ok ? r.json() : []),
+      fetch(`${apiBase}/api/accounts/${accountId}/runs/stats/overview`).then((r) => r.ok ? r.json() : null),
     ])
-      .then(([intData, statsData]) => {
-        setIntegrations(intData);
+      .then(([wfData, statsData]) => {
+        setWorkflows(wfData);
         setStats(statsData);
       })
       .catch((err) => setError(err.message));
-  }, []);
+  }, [apiBase, accountId]);
 
   return (
     <div>
@@ -31,7 +32,7 @@ export default function DashboardPage() {
       {error && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
           <p className="text-yellow-800 text-sm">
-            Kunne ikke koble til API-serveren. Sjekk at backend kjører på port 3001.
+            Kunne ikke koble til API-serveren. Sjekk at backend kjorer pa port 3001.
           </p>
         </div>
       )}
@@ -39,17 +40,17 @@ export default function DashboardPage() {
       {/* Stats cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
         <StatCard
-          label="Aktive integrasjoner"
-          value={integrations.filter((i) => i.status === 'active').length}
+          label="Aktive arbeidsflyter"
+          value={stats?.activeWorkflows ?? workflows.filter((w) => w.isActive).length}
           color="blue"
         />
         <StatCard
-          label="Vellykkede kjøringer"
+          label="Vellykkede kjoringer"
           value={stats?.success ?? 0}
           color="green"
         />
         <StatCard
-          label="Feilede kjøringer"
+          label="Feilede kjoringer"
           value={stats?.failed ?? 0}
           color="red"
         />
@@ -60,49 +61,49 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* Integrations overview */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+      {/* Active workflows */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-8">
         <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900">Integrasjoner</h2>
+          <h2 className="text-lg font-semibold text-gray-900">Aktive arbeidsflyter</h2>
           <Link
-            href="/integrations"
+            href="/workflows"
             className="text-sm text-primary-600 hover:text-primary-700 font-medium"
           >
-            Se alle
+            Utforsk alle
           </Link>
         </div>
 
-        {integrations.length === 0 ? (
+        {workflows.length === 0 ? (
           <div className="px-6 py-12 text-center text-gray-500">
-            <p className="mb-2">Ingen integrasjoner konfigurert ennå.</p>
+            <p className="mb-2">Ingen arbeidsflyter aktivert enna.</p>
             <Link
-              href="/integrations"
+              href="/workflows"
               className="text-primary-600 hover:text-primary-700 font-medium text-sm"
             >
-              Opprett din første integrasjon
+              Utforsk tilgjengelige arbeidsflyter
             </Link>
           </div>
         ) : (
           <div className="divide-y divide-gray-100">
-            {integrations.map((integration) => (
+            {workflows.map((aw) => (
               <Link
-                key={integration.id}
-                href={`/integrations/${integration.id}`}
+                key={aw.id}
+                href={`/my-workflows/${aw.id}`}
                 className="flex items-center justify-between px-6 py-4 hover:bg-gray-50 transition-colors"
               >
-                <div className="flex items-center gap-4">
-                  <div>
-                    <p className="font-medium text-gray-900">{integration.name}</p>
-                    <p className="text-sm text-gray-500">
-                      {integration.sourceConnector?.name} → {integration.destinationConnector?.name}
-                    </p>
-                  </div>
+                <div>
+                  <p className="font-medium text-gray-900">{aw.workflow?.name}</p>
+                  <p className="text-sm text-gray-500">
+                    {aw.workflow?.sourceIntegration?.name} &rarr; {aw.workflow?.targetIntegration?.name}
+                    {' \u00b7 '}
+                    {aw.scheduleCronExpression === 'manual' ? 'Manuell' : aw.scheduleCronExpression}
+                  </p>
                 </div>
                 <div className="flex items-center gap-4">
-                  <StatusBadge status={integration.status} />
-                  {integration.lastRunAt && (
+                  <StatusBadge status={aw.isActive ? 'active' : 'paused'} />
+                  {aw.lastRunAt && (
                     <span className="text-xs text-gray-400">
-                      Sist kjørt: {new Date(integration.lastRunAt).toLocaleString('nb-NO')}
+                      Sist kjort: {new Date(aw.lastRunAt).toLocaleString('nb-NO')}
                     </span>
                   )}
                 </div>
@@ -114,9 +115,9 @@ export default function DashboardPage() {
 
       {/* Recent runs */}
       {stats?.recentRuns && stats.recentRuns.length > 0 && (
-        <div className="mt-8 bg-white rounded-lg shadow-sm border border-gray-200">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
           <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-gray-900">Siste kjøringer</h2>
+            <h2 className="text-lg font-semibold text-gray-900">Siste kjoringer</h2>
             <Link
               href="/logs"
               className="text-sm text-primary-600 hover:text-primary-700 font-medium"
@@ -132,18 +133,13 @@ export default function DashboardPage() {
               >
                 <div>
                   <span className="text-sm font-medium text-gray-900">
-                    {run.integration?.name}
+                    {run.accountWorkflow?.workflow?.name ?? 'Ukjent'}
                   </span>
                   <span className="text-xs text-gray-400 ml-3">
-                    {new Date(run.startedAt).toLocaleString('nb-NO')}
+                    {new Date(run.startTime).toLocaleString('nb-NO')}
                   </span>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-gray-500">
-                    {run.recordsProcessed} poster
-                  </span>
-                  <StatusBadge status={run.status} />
-                </div>
+                <StatusBadge status={run.status} />
               </div>
             ))}
           </div>

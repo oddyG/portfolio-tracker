@@ -28,6 +28,12 @@ export {
 } from './engine/transform.js';
 export type { FieldMapping, TransformRule } from './engine/transform.js';
 
+// JavaScript Execution Engine
+export { executeJavaScript } from './engine/js-executor.js';
+export type { ExecutionContext, ExecutionResult } from './engine/js-executor.js';
+export { runWorkflow } from './engine/workflow-runner.js';
+export type { WorkflowData, WorkflowExecutionResult, WorkflowReturnObject } from './engine/workflow-runner.js';
+
 // Utils
 export { encrypt, decrypt } from './utils/crypto.js';
 export { logger } from './utils/logger.js';
