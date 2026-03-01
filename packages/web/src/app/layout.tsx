@@ -3,8 +3,8 @@ import { Nav } from '@/components/nav';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Integrera – Integrasjonsplattform',
-  description: 'Modulært integrasjonsrammeverk for norske forretningssystemer',
+  title: 'Integrera iPaaS – Integrasjonsplattform',
+  description: 'Lavkode-integrasjonsplattform for norske forretningssystemer. Koble sammen ERP, CRM, nettbutikk og mer.',
 };
 
 export default function RootLayout({

@@ -7,50 +7,161 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Connector {
+// ── Users & Multi-tenancy ─────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String?
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  ownedAccounts Account[]     @relation("AccountOwner")
+  accountUsers  AccountUser[]
+  sessions      Session[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Account {
   id        String   @id @default(cuid())
   name      String
-  type      String   // 'source' | 'destination' | 'both'
-  category  String
-  config    String   // JSON – kryptert auth-detaljer
-  isActive  Boolean  @default(true)
+  ownerId   String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  integrationsAsSource Integration[] @relation("SourceConnector")
-  integrationsAsDest   Integration[] @relation("DestConnector")
+  owner            User              @relation("AccountOwner", fields: [ownerId], references: [id])
+  accountUsers     AccountUser[]
+  accountWorkflows AccountWorkflow[]
+  accountVariables AccountVariable[]
+  accountFunctions AccountFunction[]
 }
 
+model AccountUser {
+  id        String   @id @default(cuid())
+  userId    String
+  accountId String
+  role      String   @default("member") // 'owner' | 'admin' | 'member'
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, accountId])
+}
+
+// ── Integration Catalog ───────────────────────────────────────
+
 model Integration {
+  id          String   @id @default(cuid())
+  name        String
+  description String   @default("")
+  category    String   // 'regnskap' | 'nettbutikk' | 'betaling' | 'crm' | 'erp' | 'faktura' | 'frakt'
+  logoUrl     String   @default("")
+  authType    String   @default("api_key") // 'api_key' | 'oauth2' | 'basic'
+  baseUrl     String   @default("")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workflowsAsSource Workflow[] @relation("SourceIntegration")
+  workflowsAsTarget Workflow[] @relation("TargetIntegration")
+}
+
+// ── Workflow Templates ────────────────────────────────────────
+
+model Workflow {
+  id                    String   @id @default(cuid())
+  name                  String
+  description           String   @default("")
+  sourceIntegrationId   String
+  targetIntegrationId   String
+  defaultJsLogic        String   @default("") // Default JavaScript logic template
+  category              String   @default("sync") // 'sync' | 'transform' | 'notification'
+  isPublished           Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  sourceIntegration  Integration       @relation("SourceIntegration", fields: [sourceIntegrationId], references: [id])
+  targetIntegration  Integration       @relation("TargetIntegration", fields: [targetIntegrationId], references: [id])
+  accountWorkflows   AccountWorkflow[]
+}
+
+// ── Active Workflow Instances (per account) ───────────────────
+
+model AccountWorkflow {
   id                     String   @id @default(cuid())
-  name                   String
-  sourceConnectorId      String
-  sourceConnector        Connector @relation("SourceConnector", fields: [sourceConnectorId], references: [id])
-  destinationConnectorId String
-  destinationConnector   Connector @relation("DestConnector", fields: [destinationConnectorId], references: [id])
-  fieldMappings          String   // JSON
-  transformRules         String   @default("[]") // JSON
-  schedule               String   @default("manual") // cron-uttrykk eller 'manual'
-  status                 String   @default("paused") // 'active' | 'paused' | 'error'
-  errorHandling          String   @default("skip")   // 'skip' | 'retry' | 'halt'
+  accountId              String
+  workflowId             String
+  isActive               Boolean  @default(false)
+  scheduleCronExpression String   @default("manual")
+  customJsLogic          String?  // Override default logic; null = use workflow default
   lastRunAt              DateTime?
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 
-  syncRuns SyncRun[]
+  account      Account       @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  workflow     Workflow       @relation(fields: [workflowId], references: [id])
+  workflowRuns WorkflowRun[]
+
+  @@unique([accountId, workflowId])
 }
 
-model SyncRun {
-  id               String   @id @default(cuid())
-  integrationId    String
-  integration      Integration @relation(fields: [integrationId], references: [id])
-  startedAt        DateTime @default(now())
-  completedAt      DateTime?
-  status           String   @default("running") // 'running' | 'success' | 'partial' | 'failed'
-  recordsProcessed Int      @default(0)
-  recordsCreated   Int      @default(0)
-  recordsUpdated   Int      @default(0)
-  recordsSkipped   Int      @default(0)
-  recordsFailed    Int      @default(0)
-  errors           String   @default("[]") // JSON
+// ── Account-scoped Variables ──────────────────────────────────
+
+model AccountVariable {
+  id        String   @id @default(cuid())
+  accountId String
+  key       String
+  valueJson String   // JSON-encoded value
+  isSecret  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([accountId, key])
+}
+
+// ── Account-scoped Reusable Functions ─────────────────────────
+
+model AccountFunction {
+  id           String   @id @default(cuid())
+  accountId    String
+  functionName String
+  jsCode       String
+  description  String   @default("")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([accountId, functionName])
+}
+
+// ── Workflow Run Logs ─────────────────────────────────────────
+
+model WorkflowRun {
+  id                String    @id @default(cuid())
+  accountWorkflowId String
+  startTime         DateTime  @default(now())
+  endTime           DateTime?
+  status            String    @default("running") // 'running' | 'success' | 'failed' | 'partial'
+  logOutput         String    @default("") // Full execution log
+  errorMessage      String?
+  recordsProcessed  Int       @default(0)
+  recordsCreated    Int       @default(0)
+  recordsUpdated    Int       @default(0)
+  recordsFailed     Int       @default(0)
+  createdAt         DateTime  @default(now())
+
+  accountWorkflow AccountWorkflow @relation(fields: [accountWorkflowId], references: [id], onDelete: Cascade)
 }

@@ -1,73 +1,44 @@
 /**
- * API routes for viewing sync run logs.
+ * API routes for viewing workflow run logs.
+ * GET /api/accounts/:accountId/runs
  */
 
 import { Router, Request, Response } from 'express';
 import { prisma } from '../db.js';
 
-const router = Router();
+const router = Router({ mergeParams: true });
 
-// List sync runs (with optional filters)
-router.get('/', async (req: Request, res: Response) => {
-  const { integrationId, status, limit } = req.query;
+function p(req: Request, key: string): string {
+  return String(req.params[key] ?? '');
+}
 
-  const where: Record<string, unknown> = {};
-  if (integrationId) where['integrationId'] = integrationId;
-  if (status) where['status'] = status;
+// Get stats overview for an account (must be before /:runId)
+router.get('/stats/overview', async (req: Request, res: Response) => {
+  const accountId = p(req, 'accountId');
+  const filter = { accountWorkflow: { accountId } };
 
-  const syncRuns = await prisma.syncRun.findMany({
-    where,
+  const [total, success, failed, partial] = await Promise.all([
+    prisma.workflowRun.count({ where: filter }),
+    prisma.workflowRun.count({ where: { ...filter, status: 'success' } }),
+    prisma.workflowRun.count({ where: { ...filter, status: 'failed' } }),
+    prisma.workflowRun.count({ where: { ...filter, status: 'partial' } }),
+  ]);
+
+  const recentRuns = await prisma.workflowRun.findMany({
+    where: filter,
+    orderBy: { startTime: 'desc' },
+    take: 10,
     include: {
-      integration: {
-        select: { id: true, name: true },
-      },
-    },
-    orderBy: { startedAt: 'desc' },
-    take: limit ? parseInt(limit as string, 10) : 50,
-  });
-
-  res.json(syncRuns);
-});
-
-// Get single sync run with details
-router.get('/:id', async (req: Request, res: Response) => {
-  const syncRun = await prisma.syncRun.findUnique({
-    where: { id: req.params['id'] },
-    include: {
-      integration: {
-        select: {
-          id: true,
-          name: true,
-          sourceConnector: { select: { name: true } },
-          destinationConnector: { select: { name: true } },
+      accountWorkflow: {
+        include: {
+          workflow: { select: { name: true } },
         },
       },
     },
   });
 
-  if (!syncRun) {
-    res.status(404).json({ error: 'Synkroniseringskjøring ikke funnet' });
-    return;
-  }
-
-  res.json(syncRun);
-});
-
-// Get stats overview
-router.get('/stats/overview', async (_req: Request, res: Response) => {
-  const [total, success, failed, partial] = await Promise.all([
-    prisma.syncRun.count(),
-    prisma.syncRun.count({ where: { status: 'success' } }),
-    prisma.syncRun.count({ where: { status: 'failed' } }),
-    prisma.syncRun.count({ where: { status: 'partial' } }),
-  ]);
-
-  const recentRuns = await prisma.syncRun.findMany({
-    orderBy: { startedAt: 'desc' },
-    take: 10,
-    include: {
-      integration: { select: { name: true } },
-    },
+  const activeWorkflows = await prisma.accountWorkflow.count({
+    where: { accountId, isActive: true },
   });
 
   res.json({
@@ -75,9 +46,67 @@ router.get('/stats/overview', async (_req: Request, res: Response) => {
     success,
     failed,
     partial,
+    activeWorkflows,
     successRate: total > 0 ? ((success / total) * 100).toFixed(1) : '0',
     recentRuns,
   });
+});
+
+// List workflow runs for an account (with optional filters)
+router.get('/', async (req: Request, res: Response) => {
+  const accountId = p(req, 'accountId');
+  const { status, limit, workflowId } = req.query;
+
+  const where: Record<string, unknown> = {
+    accountWorkflow: { accountId },
+  };
+  if (status) where['status'] = String(status);
+  if (workflowId) where['accountWorkflowId'] = String(workflowId);
+
+  const runs = await prisma.workflowRun.findMany({
+    where,
+    include: {
+      accountWorkflow: {
+        include: {
+          workflow: { select: { id: true, name: true } },
+        },
+      },
+    },
+    orderBy: { startTime: 'desc' },
+    take: limit ? parseInt(String(limit), 10) : 50,
+  });
+
+  res.json(runs);
+});
+
+// Get a single run with details
+router.get('/:runId', async (req: Request, res: Response) => {
+  const accountId = p(req, 'accountId');
+  const run = await prisma.workflowRun.findFirst({
+    where: {
+      id: p(req, 'runId'),
+      accountWorkflow: { accountId },
+    },
+    include: {
+      accountWorkflow: {
+        include: {
+          workflow: {
+            include: {
+              sourceIntegration: { select: { name: true } },
+              targetIntegration: { select: { name: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!run) {
+    res.status(404).json({ error: 'Kjoringslogg ikke funnet.' });
+    return;
+  }
+
+  res.json(run);
 });
 
 export default router;
