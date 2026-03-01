@@ -28,7 +28,7 @@ router.get('/', async (_req: Request, res: Response) => {
 // Get single integration with details
 router.get('/:id', async (req: Request, res: Response) => {
   const integration = await prisma.integration.findUnique({
-    where: { id: req.params['id'] },
+    where: { id: req.params['id'] as string },
     include: {
       sourceConnector: { select: { id: true, name: true, category: true } },
       destinationConnector: { select: { id: true, name: true, category: true } },
@@ -94,7 +94,7 @@ router.put('/:id', async (req: Request, res: Response) => {
   if (errorHandling !== undefined) data['errorHandling'] = errorHandling;
 
   const integration = await prisma.integration.update({
-    where: { id: req.params['id'] },
+    where: { id: req.params['id'] as string },
     data,
   });
 
@@ -104,15 +104,15 @@ router.put('/:id', async (req: Request, res: Response) => {
 // Delete integration
 router.delete('/:id', async (req: Request, res: Response) => {
   // Delete associated sync runs first
-  await prisma.syncRun.deleteMany({ where: { integrationId: req.params['id'] } });
-  await prisma.integration.delete({ where: { id: req.params['id'] } });
+  await prisma.syncRun.deleteMany({ where: { integrationId: req.params['id'] as string } });
+  await prisma.integration.delete({ where: { id: req.params['id'] as string } });
   res.status(204).end();
 });
 
 // Trigger manual sync
 router.post('/:id/sync', async (req: Request, res: Response) => {
   const integration = await prisma.integration.findUnique({
-    where: { id: req.params['id'] },
+    where: { id: req.params['id'] as string },
     include: {
       sourceConnector: true,
       destinationConnector: true,

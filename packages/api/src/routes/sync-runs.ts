@@ -32,7 +32,7 @@ router.get('/', async (req: Request, res: Response) => {
 // Get single sync run with details
 router.get('/:id', async (req: Request, res: Response) => {
   const syncRun = await prisma.syncRun.findUnique({
-    where: { id: req.params['id'] },
+    where: { id: req.params['id'] as string },
     include: {
       integration: {
         select: {

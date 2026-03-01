@@ -35,7 +35,7 @@ router.get('/', async (_req: Request, res: Response) => {
 // Get single connector
 router.get('/:id', async (req: Request, res: Response) => {
   const connector = await prisma.connector.findUnique({
-    where: { id: req.params['id'] },
+    where: { id: req.params['id'] as string },
   });
 
   if (!connector) {
@@ -80,7 +80,7 @@ router.put('/:id', async (req: Request, res: Response) => {
   }
 
   const connector = await prisma.connector.update({
-    where: { id: req.params['id'] },
+    where: { id: req.params['id'] as string },
     data,
   });
 
@@ -89,14 +89,14 @@ router.put('/:id', async (req: Request, res: Response) => {
 
 // Delete connector
 router.delete('/:id', async (req: Request, res: Response) => {
-  await prisma.connector.delete({ where: { id: req.params['id'] } });
+  await prisma.connector.delete({ where: { id: req.params['id'] as string } });
   res.status(204).end();
 });
 
 // Test connection
 router.post('/:id/test', async (req: Request, res: Response) => {
   const connector = await prisma.connector.findUnique({
-    where: { id: req.params['id'] },
+    where: { id: req.params['id'] as string },
   });
 
   if (!connector) {
@@ -133,7 +133,7 @@ router.post('/:id/test', async (req: Request, res: Response) => {
 // Get connector entities (metadata)
 router.get('/:id/entities', async (req: Request, res: Response) => {
   const connector = await prisma.connector.findUnique({
-    where: { id: req.params['id'] },
+    where: { id: req.params['id'] as string },
   });
 
   if (!connector) {
