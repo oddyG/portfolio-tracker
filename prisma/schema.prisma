@@ -1,0 +1,56 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Connector {
+  id        String   @id @default(cuid())
+  name      String
+  type      String   // 'source' | 'destination' | 'both'
+  category  String
+  config    String   // JSON – kryptert auth-detaljer
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  integrationsAsSource Integration[] @relation("SourceConnector")
+  integrationsAsDest   Integration[] @relation("DestConnector")
+}
+
+model Integration {
+  id                     String   @id @default(cuid())
+  name                   String
+  sourceConnectorId      String
+  sourceConnector        Connector @relation("SourceConnector", fields: [sourceConnectorId], references: [id])
+  destinationConnectorId String
+  destinationConnector   Connector @relation("DestConnector", fields: [destinationConnectorId], references: [id])
+  fieldMappings          String   // JSON
+  transformRules         String   @default("[]") // JSON
+  schedule               String   @default("manual") // cron-uttrykk eller 'manual'
+  status                 String   @default("paused") // 'active' | 'paused' | 'error'
+  errorHandling          String   @default("skip")   // 'skip' | 'retry' | 'halt'
+  lastRunAt              DateTime?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  syncRuns SyncRun[]
+}
+
+model SyncRun {
+  id               String   @id @default(cuid())
+  integrationId    String
+  integration      Integration @relation(fields: [integrationId], references: [id])
+  startedAt        DateTime @default(now())
+  completedAt      DateTime?
+  status           String   @default("running") // 'running' | 'success' | 'partial' | 'failed'
+  recordsProcessed Int      @default(0)
+  recordsCreated   Int      @default(0)
+  recordsUpdated   Int      @default(0)
+  recordsSkipped   Int      @default(0)
+  recordsFailed    Int      @default(0)
+  errors           String   @default("[]") // JSON
+}

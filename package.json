@@ -1,0 +1,32 @@
+{
+  "name": "integrera-framework",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Modulært integrasjonsrammeverk inspirert av Integrera.no",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:api\" \"npm run dev:web\"",
+    "dev:api": "cd packages/api && npx tsx watch src/server.ts",
+    "dev:web": "cd packages/web && npm run dev",
+    "build": "npm run build:core && npm run build:api && npm run build:web",
+    "build:core": "cd packages/core && npx tsc",
+    "build:api": "cd packages/api && npx tsc",
+    "build:web": "cd packages/web && npm run build",
+    "db:generate": "cd prisma && npx prisma generate",
+    "db:push": "cd prisma && npx prisma db push",
+    "db:seed": "cd prisma && npx tsx seed.ts",
+    "db:setup": "npm run db:generate && npm run db:push && npm run db:seed",
+    "test": "npx vitest run",
+    "lint": "npx tsc --noEmit"
+  },
+  "workspaces": [
+    "packages/*",
+    "prisma"
+  ],
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "concurrently": "^9.0.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.0.0",
+    "tsx": "^4.19.0"
+  }
+}
